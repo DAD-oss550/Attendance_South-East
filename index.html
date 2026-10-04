@@ -170,7 +170,7 @@ details{margin-top:8px}summary{cursor:pointer;min-height:36px}
     <div class="tabs" id="atabs" role="tablist">
       <button type="button" data-t="today" aria-selected="true">Today</button>
       <button type="button" data-t="week" aria-selected="false">Week</button>
-      <button type="button" data-t="stations" aria-selected="false">Stations</button>
+      <button type="button" data-t="stations" aria-selected="false">Locations</button>
       <button type="button" data-t="staff" aria-selected="false">Staff</button>
     </div>
     <div id="a-today"></div>
@@ -201,6 +201,7 @@ function addDays(ds,n){var p=ds.split('-');var d=new Date(Date.UTC(+p[0],+p[1]-1
 function dayLabel(ds){var p=ds.split('-');var d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));var N=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return N[d.getUTCDay()]+' '+(+p[2])+' '+M[+p[1]-1];}
 function shortDay(ds){var p=ds.split('-');var d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getUTCDay()]+' '+(+p[2]);}
 function statusClass(s){return s==='On time'||s==='In'||s==='OK'||s==='Out'?'ok':(s==='Late'||s==='Early departure'||s==='Not in'||s==='Not yet')?'warn':(s==='Absent'||s==='Blocked')?'bad':(s==='Holiday')?'info':'mute';}
+function place(station,office){return office?station+' · '+office:station;}
 function greeting(h){return h<12?'Good morning':(h<17?'Good afternoon':'Good evening');}
 function firstName(n){return String(n||'').split(' ')[0];}
 /*CORE-END*/
@@ -255,7 +256,7 @@ function loadNames(){
     if(!c.ok){clear(sel);var o=el('option','', 'Could not load names');o.value='';sel.appendChild(o);showSignErr(c.error);return;}
     cfg=c;clear(sel);
     var o0=el('option','','Choose your name');o0.value='';sel.appendChild(o0);
-    var byStation={};c.staff.forEach(function(s){(byStation[s.station]=byStation[s.station]||[]).push(s.name);});
+    var byStation={};c.staff.forEach(function(s){var k=place(s.station,s.office);(byStation[k]=byStation[k]||[]).push(s.name);});
     Object.keys(byStation).sort().forEach(function(st){
       var g=document.createElement('optgroup');g.label=st;
       byStation[st].sort().forEach(function(n){var o=el('option','',n);o.value=n;g.appendChild(o);});
@@ -284,7 +285,7 @@ $('inPin').addEventListener('keydown',function(e){if(e.key==='Enter')$('btnSign'
 /* ---------- staff: home ---------- */
 function renderHome(){
   $('greet').textContent=greeting(new Date().getHours())+', '+firstName(me.name);
-  $('stationLine').textContent=me.station;
+  $('stationLine').textContent=place(me.station,me.office);
   $('todayDate').textContent=dayLabel(me.today);
   var s=$('todayStatus');
   if(me.outTime){s.textContent='Checked out at '+me.outTime;}
@@ -425,7 +426,7 @@ function renderBoard(r){
   var c=el('div','counts');
   [['In',r.counts.in],['Late',r.counts.late],['Not in',r.counts.notIn],['Out',r.counts.out]].forEach(function(x){var d=el('div');d.appendChild(el('b','',String(x[1])));d.appendChild(el('span','',x[0]));c.appendChild(d);});
   box.appendChild(c);
-  var stations={};r.rows.forEach(function(x){(stations[x.station]=stations[x.station]||[]).push(x);});
+  var stations={};r.rows.forEach(function(x){var k=place(x.station,x.office);(stations[k]=stations[k]||[]).push(x);});
   Object.keys(stations).sort().forEach(function(st){
     var card=el('div','card');card.appendChild(el('h2','',st));
     stations[st].forEach(function(x){
@@ -449,7 +450,7 @@ function renderBoard(r){
   if(!r.rows.length){var e=el('div','card');e.appendChild(el('div','note info','No staff added yet. Use the Staff tab.'));box.appendChild(e);}
   if(r.blocked.length){
     var bc=el('div','card');bc.appendChild(el('h2','','Blocked: tried outside the station'));
-    r.blocked.forEach(function(b){var row=el('div','row'),l=el('div','l');l.appendChild(el('div','n',b.name));l.appendChild(el('div','s',b.time+' · '+b.station+' · '+b.distance+' m away'));row.appendChild(l);row.appendChild(el('span','pill bad','Blocked'));bc.appendChild(row);});
+    r.blocked.forEach(function(b){var row=el('div','row'),l=el('div','l');l.appendChild(el('div','n',b.name));l.appendChild(el('div','s',b.time+' · '+place(b.station,b.office)+' · '+b.distance+' m away'));row.appendChild(l);row.appendChild(el('span','pill bad','Blocked'));bc.appendChild(row);});
     box.appendChild(bc);
   }
 }
@@ -467,7 +468,7 @@ function renderWeek(r){
   var thd=document.createElement('thead');thd.appendChild(hr);t.appendChild(thd);
   var tb=document.createElement('tbody');
   r.rows.forEach(function(x){
-    var tr=document.createElement('tr');tr.appendChild(el('td','nm',x.name));
+    var tr=document.createElement('tr');var tdn=el('td','nm',x.name);tdn.appendChild(el('div','help',place(x.station,x.office)));tr.appendChild(tdn);
     x.cells.forEach(function(c){var td=el('td','c-'+(c.c==='-'?'dash':c.c),c.c);if(c.inTime)td.title=c.inTime+(c.outTime?' – '+c.outTime:'');tr.appendChild(td);});
     [x.present,x.late,x.absent,x.hours].forEach(function(v){tr.appendChild(el('td','',String(v)));});
     tb.appendChild(tr);
@@ -481,14 +482,15 @@ function renderWeek(r){
 function loadStations(){var box=$('a-stations');loading(box);call({action:'admin_stations',adminPin:apin}).then(function(r){if(!r.ok)return errCard(box,r.error);renderStations(r.stations);});}
 function renderStations(list){
   var box=$('a-stations');clear(box);
-  var intro=el('div','card');intro.appendChild(el('div','note info','Stand inside each station, tap "Use my current location", then Save. Check-ins are only accepted inside the radius.'));box.appendChild(intro);
+  var intro=el('div','card');intro.appendChild(el('div','note info','Stand inside each office, tap "Use my current location", then Save. If both offices of a station are in the same compound, use "Same as" on the second one. Check-ins are accepted inside the radius of either office of the person\'s station.'));box.appendChild(intro);
+  var prev=null;
   list.forEach(function(s){
-    var card=el('div','card');card.appendChild(el('h2','',s.name));
+    var card=el('div','card');card.appendChild(el('h2','',place(s.name,s.office)));
     var st=el('div','');st.appendChild(el('span','pill '+(s.lat===null?'bad':'ok'),s.lat===null?'Location not set':'Location set'));card.appendChild(st);
     var g=el('div','grid2');
-    var a=el('div');a.appendChild(el('label','f','Latitude'));var la=el('input');la.type='text';la.inputMode='decimal';la.value=s.lat===null?'':s.lat;a.appendChild(la);
-    var b=el('div');b.appendChild(el('label','f','Longitude'));var lo=el('input');lo.type='text';lo.inputMode='decimal';lo.value=s.lng===null?'':s.lng;b.appendChild(lo);
-    g.appendChild(a);g.appendChild(b);card.appendChild(g);
+    var a1=el('div');a1.appendChild(el('label','f','Latitude'));var la=el('input');la.type='text';la.inputMode='decimal';la.value=s.lat===null?'':s.lat;a1.appendChild(la);
+    var b1=el('div');b1.appendChild(el('label','f','Longitude'));var lo=el('input');lo.type='text';lo.inputMode='decimal';lo.value=s.lng===null?'':s.lng;b1.appendChild(lo);
+    g.appendChild(a1);g.appendChild(b1);card.appendChild(g);
     card.appendChild(el('label','f','Allowed distance (metres)'));var ra=el('input');ra.type='text';ra.inputMode='numeric';ra.value=s.radius;card.appendChild(ra);
     var msg=el('div');card.appendChild(msg);
     var use=el('button','btn secondary','📍 Use my current location');use.type='button';
@@ -497,16 +499,24 @@ function renderStations(list){
       bestFix(20000).then(function(f){busy(use,false);la.value=f.lat.toFixed(6);lo.value=f.lng.toFixed(6);clear(msg);msg.appendChild(el('div','note info','Location read (accuracy about '+Math.round(f.acc)+' m). Tap Save to keep it.'));},
         function(){busy(use,false);clear(msg);msg.appendChild(el('div','note bad','Could not read your location. Allow location for this page and try again.'));});
     });
+    card.appendChild(use);
+    if(prev&&prev.name===s.name){
+      var other=prev;
+      var same=el('button','btn secondary','Same as '+other.office);same.type='button';
+      same.addEventListener('click',function(){la.value=other.la.value;lo.value=other.lo.value;ra.value=other.ra.value;clear(msg);msg.appendChild(el('div','note info','Copied from '+other.office+'. Tap Save to keep it.'));});
+      card.appendChild(same);
+    }
     var save=el('button','btn','Save');save.type='button';
     save.addEventListener('click',function(){
       busy(save,true,'Saving…');
-      call({action:'admin_stations',adminPin:apin,station:s.name,lat:la.value.trim(),lng:lo.value.trim(),radius:ra.value.trim()}).then(function(r){
+      call({action:'admin_stations',adminPin:apin,station:s.name,office:s.office,lat:la.value.trim(),lng:lo.value.trim(),radius:ra.value.trim()}).then(function(r){
         busy(save,false);clear(msg);
         if(!r.ok){msg.appendChild(el('div','note bad',r.error));return;}
         msg.appendChild(el('div','note ok','Saved.'));st.firstChild.className='pill ok';st.firstChild.textContent='Location set';
       });
     });
-    card.appendChild(use);card.appendChild(save);box.appendChild(card);
+    card.appendChild(save);box.appendChild(card);
+    prev={name:s.name,office:s.office,la:la,lo:lo,ra:ra};
   });
 }
 
@@ -516,7 +526,12 @@ function renderStaff(list,stations,savedMsg){
   var box=$('a-staff');clear(box);
   var form=el('div','card');form.appendChild(el('h2','','Add or edit a staff member'));
   form.appendChild(el('label','f','Full name'));var nm=el('input');nm.type='text';nm.autocomplete='off';form.appendChild(nm);
-  form.appendChild(el('label','f','Station'));var sel=el('select');stations.forEach(function(s){var o=el('option','',s.name);o.value=s.name;sel.appendChild(o);});form.appendChild(sel);
+  form.appendChild(el('label','f','Station'));var sel=el('select');
+  var stNames=[];stations.forEach(function(s){if(stNames.indexOf(s.name)<0)stNames.push(s.name);});
+  stNames.forEach(function(n){var o=el('option','',n);o.value=n;sel.appendChild(o);});form.appendChild(sel);
+  form.appendChild(el('label','f','Office'));var off=el('select');form.appendChild(off);
+  function fillOffices(keep){clear(off);stations.filter(function(s){return s.name===sel.value;}).forEach(function(s){var o=el('option','',s.office);o.value=s.office;off.appendChild(o);});if(keep)off.value=keep;}
+  sel.addEventListener('change',function(){fillOffices();});fillOffices();
   form.appendChild(el('label','f','PIN (4 to 6 digits)'));var pin=el('input');pin.type='text';pin.inputMode='numeric';pin.maxLength=6;pin.autocomplete='off';form.appendChild(pin);
   form.appendChild(el('p','help','For an existing person, leave the PIN empty to keep it, or type a new one to reset it.'));
   var lab=el('label','');lab.style.cssText='display:flex;gap:8px;align-items:center;margin-top:12px;min-height:44px';
@@ -526,7 +541,7 @@ function renderStaff(list,stations,savedMsg){
   var save=el('button','btn','Save');save.type='button';
   save.addEventListener('click',function(){
     busy(save,true,'Saving…');
-    call({action:'admin_staff',adminPin:apin,name:nm.value.trim(),station:sel.value,pin:pin.value.trim(),active:act.checked}).then(function(r){
+    call({action:'admin_staff',adminPin:apin,name:nm.value.trim(),station:sel.value,office:off.value,pin:pin.value.trim(),active:act.checked}).then(function(r){
       busy(save,false);
       if(!r.ok){clear(msg);msg.appendChild(el('div','note bad',r.error));return;}
       renderStaff(r.staff,stations,'Saved: '+nm.value.trim());
@@ -535,9 +550,9 @@ function renderStaff(list,stations,savedMsg){
   form.appendChild(save);box.appendChild(form);
   var lc=el('div','card');lc.appendChild(el('h2','','Staff ('+list.length+')'));
   list.sort(function(a,b){return a.station===b.station?a.name.localeCompare(b.name):a.station.localeCompare(b.station);}).forEach(function(s){
-    var row=el('div','row'),l=el('div','l');l.appendChild(el('div','n',s.name));l.appendChild(el('div','s',s.station));row.appendChild(l);
+    var row=el('div','row'),l=el('div','l');l.appendChild(el('div','n',s.name));l.appendChild(el('div','s',s.office?place(s.station,s.office):s.station+' · office not set'));row.appendChild(l);
     row.appendChild(el('span','pill '+(s.active?'ok':'mute'),s.active?'Active':'Inactive'));
-    var ed=el('button','link','Edit');ed.type='button';ed.addEventListener('click',function(){nm.value=s.name;sel.value=s.station;act.checked=s.active;pin.value='';window.scrollTo(0,0);});
+    var ed=el('button','link','Edit');ed.type='button';ed.addEventListener('click',function(){nm.value=s.name;sel.value=s.station;fillOffices(s.office);act.checked=s.active;pin.value='';window.scrollTo(0,0);});
     row.appendChild(ed);lc.appendChild(row);
   });
   if(!list.length)lc.appendChild(el('div','note info','No staff yet. Add the first person above.'));
